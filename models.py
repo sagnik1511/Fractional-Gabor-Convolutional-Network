@@ -22,8 +22,9 @@ class MFCF(nn.Module):
         self.padding = padding
         self.stride = stride
 
-    def forward(self, h_data, l_data):
+    def forward(self, x):
 
+        h_data, l_data = x
 
         h1h, h1l = first_block(h_data,
                                kernel_size = self.kernel_size,
@@ -246,7 +247,9 @@ class FGCN(nn.Module):
                  padding = 1,
                  stride = 1,
                  dropout = 0.1,
-                 momentum = 0.9):
+                 momentum = 0.9,
+                 w0 = 1.0,
+                 w1 = 1.0):
 
         super(FGCN, self).__init__()
 
@@ -258,6 +261,8 @@ class FGCN(nn.Module):
         self.dropout = dropout
         self.momentum = momentum
         self.num_classes = num_classes
+        self.w0 = w0
+        self.w1 = w1
         self.c0 = conv(cin = 192,
                        out = 64,
                        kernel_size = (1, 1),
@@ -271,17 +276,18 @@ class FGCN(nn.Module):
         self.fc = nn.Linear(in_features = 104*104*self.num_classes, out_features = self.num_classes)
 
 
-    def forward(self, h_data, l_data, w0 = 1.0, w1 = 1.0):
+    def forward(self, x):
+        h_data, l_data = x
 
         mfcf_Block = MFCF()
         fg_conv_Block = FG_conv(in_channels = 64)
         spbr_Block = SPBr(in_channels = 50)
 
-        mfcf_op = mfcf_Block(h_data = h_data, l_data = l_data)
+        mfcf_op = mfcf_Block((h_data, l_data))
         fg_conv_op = fg_conv_Block(mfcf_op)
         spbr_op = spbr_Block(h_data)
 
-        w_ad_op = w0 * fg_conv_op + w1 * spbr_op
+        w_ad_op = self.w0 * fg_conv_op + self.w1 * spbr_op
 
         conv1 = self.c0(w_ad_op)
         conv2 = self.c1(conv1)
@@ -297,7 +303,8 @@ def test():
     h_data = torch.rand(1, 50, 100,100)
     l_data = torch.rand(1, 1, 100,100)
     model = FGCN(num_classes = 5)
-    model_op = model(h_data = h_data, l_data = l_data)
+    model_op = model((h_data, l_data))
 
     assert model_op.shape == (1, 5)
+    #print(summary(model, ((1, 50, 100, 100),(1, 1, 100, 100))))
 test()
