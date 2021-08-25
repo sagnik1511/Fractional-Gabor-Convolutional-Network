@@ -4,7 +4,6 @@ import random
 import torch
 import torch.nn as nn
 
-
 np.random.seed(42)
 torch.manual_seed(42)
 random.seed(42)
@@ -69,7 +68,6 @@ class MFCF(nn.Module):
 
         return mfcf_op
 
-    
 class FG_conv(nn.Module):
 
     def __init__(self,
@@ -100,27 +98,44 @@ class FG_conv(nn.Module):
                        kernel_size = self.kernel_size,
                        padding = self.padding,
                        stride = self.stride)
-        self.bn_ac_dr = nn.Sequential(
+        self.c2 = conv(cin=self.num_layers,
+                       out=self.num_layers,
+                       kernel_size=self.kernel_size,
+                       padding=self.padding,
+                       stride=self.stride)
+        self.bn_ac_dr_1 = nn.Sequential(
             nn.BatchNorm2d(num_features = self.num_layers, momentum = self.momentum),
             nn.ReLU(),
             nn.Dropout(p = self.dropout),
         )
+        self.bn_ac_dr_2 = nn.Sequential(
+            nn.BatchNorm2d(num_features=self.num_layers, momentum=self.momentum),
+            nn.ReLU(),
+            nn.Dropout(p=self.dropout),
+        )
+        self.bn_ac_dr_3 = nn.Sequential(
+            nn.BatchNorm2d(num_features=self.num_layers, momentum=self.momentum),
+            nn.ReLU(),
+            nn.Dropout(p=self.dropout),
+        )
+
+
 
     def forward(self, x):
-        
+
+
        # Level - 1
 
         p1 = self.c0(x)
         p2 = self.c0(x)
         p3 = self.c0(x)
         p4 = self.c0(x)
+        p1 = self.bn_ac_dr_1(p1)
+        p2 = self.bn_ac_dr_1(p2)
+        p3 = self.bn_ac_dr_1(p3)
+        p4 = self.bn_ac_dr_1(p4)
 
-        c1 = torch.cat((p1, p2, p3, p4), dim = 1)
-
-        p1 = self.bn_ac_dr(p1)
-        p2 = self.bn_ac_dr(p2)
-        p3 = self.bn_ac_dr(p3)
-        p4 = self.bn_ac_dr(p4)
+        c1 = torch.cat((p1, p2, p3, p4), dim=1)
 
        # Level - 2
 
@@ -128,20 +143,23 @@ class FG_conv(nn.Module):
         p2 = self.c1(p2)
         p3 = self.c1(p3)
         p4 = self.c1(p4)
+        p1 = self.bn_ac_dr_2(p1)
+        p2 = self.bn_ac_dr_2(p2)
+        p3 = self.bn_ac_dr_2(p3)
+        p4 = self.bn_ac_dr_2(p4)
 
-        c2 = torch.cat((p1, p2, p3, p4), dim = 1)
-
-        p1 = self.bn_ac_dr(p1)
-        p2 = self.bn_ac_dr(p2)
-        p3 = self.bn_ac_dr(p3)
-        p4 = self.bn_ac_dr(p4)
+        c2 = torch.cat((p1, p2, p3, p4), dim=1)
 
        # Level - 3
 
-        p1 = self.c1(p1)
-        p2 = self.c1(p2)
-        p3 = self.c1(p3)
-        p4 = self.c1(p4)
+        p1 = self.c2(p1)
+        p2 = self.c2(p2)
+        p3 = self.c2(p3)
+        p4 = self.c2(p4)
+        p1 = self.bn_ac_dr_3(p1)
+        p2 = self.bn_ac_dr_3(p2)
+        p3 = self.bn_ac_dr_3(p3)
+        p4 = self.bn_ac_dr_3(p4)
 
         c3 = torch.cat((p1, p2, p3, p4), dim = 1)
 
@@ -149,7 +167,6 @@ class FG_conv(nn.Module):
 
         return final_op
 
-    
 class SPBr(nn.Module):
 
     def __init__(self,
@@ -180,8 +197,23 @@ class SPBr(nn.Module):
                        kernel_size = self.kernel_size,
                        padding = self.padding,
                        stride = self.stride)
-        self.bn_ac_dr = nn.Sequential(
+        self.c2 = conv(cin=self.num_layers,
+                       out=self.num_layers,
+                       kernel_size=self.kernel_size,
+                       padding=self.padding,
+                       stride=self.stride)
+        self.bn_ac_dr_1 = nn.Sequential(
             nn.BatchNorm2d(num_features = self.num_layers, momentum = self.momentum),
+            nn.ReLU(),
+            nn.Dropout(p=self.dropout),
+        )
+        self.bn_ac_dr_2 = nn.Sequential(
+            nn.BatchNorm2d(num_features=self.num_layers, momentum=self.momentum),
+            nn.ReLU(),
+            nn.Dropout(p=self.dropout),
+        )
+        self.bn_ac_dr_3 = nn.Sequential(
+            nn.BatchNorm2d(num_features=self.num_layers, momentum=self.momentum),
             nn.ReLU(),
             nn.Dropout(p=self.dropout),
         )
@@ -189,14 +221,21 @@ class SPBr(nn.Module):
     def forward(self, x):
 
         x1 = self.c0(x)
+        x1 = self.bn_ac_dr_1(x1)
+
         x2 = self.c1(x1)
+        x2 = self.bn_ac_dr_2(x2)
+
         x3 = self.c1(x2)
+        x3 = self.bn_ac_dr_3(x3)
 
         final_op = torch.cat((x1, x2, x3), dim = 1)
 
         return final_op
-    
-    
+
+
+
+
 class FGCN(nn.Module):
 
     def __init__(self,
@@ -231,6 +270,7 @@ class FGCN(nn.Module):
                        stride = self.stride)
         self.fc = nn.Linear(in_features = 104*104*self.num_classes, out_features = self.num_classes)
 
+
     def forward(self, h_data, l_data, w0 = 1.0, w1 = 1.0):
 
         mfcf_Block = MFCF()
@@ -250,8 +290,9 @@ class FGCN(nn.Module):
 
         return output
 
-    
-    
+
+
+
 def test():
     h_data = torch.rand(1, 50, 100,100)
     l_data = torch.rand(1, 1, 100,100)
