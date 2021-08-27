@@ -5,6 +5,7 @@ FGCN Model Class
 
 """
 
+from blocks import *
 import numpy as np
 import random
 import torch
