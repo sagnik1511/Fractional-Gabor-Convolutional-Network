@@ -3,6 +3,7 @@ import numpy as np
 import random
 import torch
 import torch.nn as nn
+from torchsummary import summary
 
 np.random.seed(42)
 torch.manual_seed(42)
@@ -11,162 +12,95 @@ random.seed(42)
 
 class MFCF(nn.Module):
 
-    def __init__(self, channels = 32,
-                 kernel_size = (2, 2),
-                 padding = 1,
-                 stride = 1):
+    def __init__(self, in_channels=50,
+                 out_channels = 32,
+                 kernel_size = (3, 3),
+                 stride=1,
+                 padding = 1):
 
         super(MFCF, self).__init__()
-        self.channels = channels
-        self.kernel_size = kernel_size
-        self.padding = padding
-        self.stride = stride
+        self.pcba1h = PCBA(in_channels, out_channels, kernel_size, stride, padding)
+        self.pcba1l = PCBA(1, out_channels, kernel_size, stride, padding)
+        self.cba1h = CBA(in_channels, out_channels, kernel_size, stride, padding)
+        self.cba1l = CBA(1, out_channels, kernel_size, stride, padding)
+        self.pcba2h = PCBA(out_channels*2, out_channels*2, kernel_size, stride, padding)
+        self.ucba2l = UCBA(out_channels*2, out_channels*2, kernel_size, stride, padding)
+        self.cba2h = CBA(out_channels*2, out_channels*2, kernel_size, stride, padding)
+        self.cba2l = CBA(out_channels*2, out_channels*2, kernel_size, stride, padding)
+        self.ucba3l = UCBA(out_channels*2, out_channels, kernel_size, stride, padding)
+        self.cba3h = CBA(out_channels*2, out_channels, kernel_size, stride, padding)
 
     def forward(self, x):
-
         h_data, l_data = x
 
-        h1h, h1l = first_block(h_data,
-                               kernel_size = self.kernel_size,
-                               padding = self.padding,
-                               stride = self.stride,
-                               pool = "max")
-        l1h, l1l = first_block(l_data,
-                               kernel_size = self.kernel_size,
-                               padding = self.padding,
-                               stride = self.stride,
-                               pool = "max")
-        h2 = torch.cat((h1h, l1h), dim = 1)
-        l2 = torch.cat((h1l, l1l), dim = 1)
+        h1h = self.cba1h(h_data)
+        h1l = self.pcba1h(h_data)
+        l1h = self.cba1l(l_data)
+        l1l = self.pcba1l(l_data)
 
-        h3h, h3l = second_block(data = h2,
-                                kernel_size = self.kernel_size,
-                                padding = self.padding,
-                                stride = self.stride,
-                                pool = "max")
-        l3l, l3h = second_block(data = l2,
-                                kernel_size = self.kernel_size,
-                                padding = self.padding,
-                                stride = self.stride,
-                                pool = "max",
-                                downsample = False)
+        h1 = torch.cat((h1h, l1h), dim = 1)
+        l1 = torch.cat((h1l,l1l), dim = 1)
 
-        h4 = torch.cat((h3h,l3h), dim = 1)
-        l4 = torch.cat((h3l, l3l), dim = 1)
+        h2h = self.cba2h(h1)
+        h2l = self.pcba2h(h1)
+        l2h = self.ucba2l(l1)
+        l2l = self.cba2l(l1)
+
+        h2 = torch.cat((h2h, l2h), dim = 1)
+        l2 = torch.cat((h2l, l2l), dim = 1)
+
+        h3 = self.cba3h(h2)
+        l3 = self.ucba3l(l2)
+
+        return torch.cat((h3, l3), dim = 1)
 
 
-        h5 = third_block(data = h4,
-                         kernel_size = self.kernel_size,
-                         padding = self.padding,
-                         stride = self.stride,
-                         upsample = False)
-        l5 = third_block(data = l4,
-                         kernel_size = self.kernel_size,
-                         padding = self.padding,
-                         stride = self.stride)
 
-        mfcf_op= torch.cat((h5, l5), axis = 1)
 
-        return mfcf_op
 
 class FG_conv(nn.Module):
 
     def __init__(self,
                  in_channels = 64,
+                 out_channels = 16,
                  kernel_size = (3, 3),
-                 num_layers = 16,
+                 stride=1,
                  padding = 1,
-                 stride = 1,
-                 dropout = 0.1,
-                 momentum = 0.9):
+                 momentum=0.9,
+                 dropout = 0.1):
 
-        super(FG_conv, self).__init__()
-
-        self.in_channels = in_channels
-        self.kernel_size = kernel_size
-        self.num_layers = num_layers
-        self.padding = padding
-        self.stride = stride
-        self.dropout = dropout
-        self.momentum = momentum
-        self.c0 = conv(cin = self.in_channels,
-                       out = self.num_layers,
-                       kernel_size = self.kernel_size,
-                       padding = self.padding,
-                       stride = self.stride)
-        self.c1 = conv(cin = self.num_layers,
-                       out = self.num_layers,
-                       kernel_size = self.kernel_size,
-                       padding = self.padding,
-                       stride = self.stride)
-        self.c2 = conv(cin=self.num_layers,
-                       out=self.num_layers,
-                       kernel_size=self.kernel_size,
-                       padding=self.padding,
-                       stride=self.stride)
-        self.bn_ac_dr_1 = nn.Sequential(
-            nn.BatchNorm2d(num_features = self.num_layers, momentum = self.momentum),
-            nn.ReLU(),
-            nn.Dropout(p = self.dropout),
-        )
-        self.bn_ac_dr_2 = nn.Sequential(
-            nn.BatchNorm2d(num_features=self.num_layers, momentum=self.momentum),
-            nn.ReLU(),
-            nn.Dropout(p=self.dropout),
-        )
-        self.bn_ac_dr_3 = nn.Sequential(
-            nn.BatchNorm2d(num_features=self.num_layers, momentum=self.momentum),
-            nn.ReLU(),
-            nn.Dropout(p=self.dropout),
-        )
-
-
+        super().__init__()
+        self.p1 = [Conv(in_channels, out_channels, kernel_size, stride, padding) for _ in range(4)]
+        self.p2 = [Conv(out_channels, out_channels, kernel_size, stride, padding) for _ in range(4)]
+        self.p3 = [Conv(out_channels, out_channels, kernel_size, stride, padding) for _ in range(4)]
+        self.bad = BAD(in_channels = out_channels, momentum = momentum, dropout = dropout)
 
     def forward(self, x):
 
+        x1 = self.p1[0](x)
+        x2 = self.p1[1](x)
+        x3 = self.p1[2](x)
+        x4 = self.p1[3](x)
 
-       # Level - 1
 
-        p1 = self.c0(x)
-        p2 = self.c0(x)
-        p3 = self.c0(x)
-        p4 = self.c0(x)
-        p1 = self.bn_ac_dr_1(p1)
-        p2 = self.bn_ac_dr_1(p2)
-        p3 = self.bn_ac_dr_1(p3)
-        p4 = self.bn_ac_dr_1(p4)
+        c1 = torch.cat((x1, x2, x3, x4), dim = 1)
 
-        c1 = torch.cat((p1, p2, p3, p4), dim=1)
+        x1 = self.p2[0](self.bad(x1))
+        x2 = self.p2[1](self.bad(x2))
+        x3 = self.p2[2](self.bad(x3))
+        x4 = self.p2[3](self.bad(x4))
 
-       # Level - 2
+        c2 = torch.cat((x1, x2, x3, x4), dim = 1)
 
-        p1 = self.c1(p1)
-        p2 = self.c1(p2)
-        p3 = self.c1(p3)
-        p4 = self.c1(p4)
-        p1 = self.bn_ac_dr_2(p1)
-        p2 = self.bn_ac_dr_2(p2)
-        p3 = self.bn_ac_dr_2(p3)
-        p4 = self.bn_ac_dr_2(p4)
+        x1 = self.p3[0](self.bad(x1))
+        x2 = self.p3[1](self.bad(x2))
+        x3 = self.p3[2](self.bad(x3))
+        x4 = self.p3[3](self.bad(x4))
 
-        c2 = torch.cat((p1, p2, p3, p4), dim=1)
+        c3 = torch.cat((x1, x2, x3, x4),dim = 1)
 
-       # Level - 3
+        return torch.cat((c1, c2, c3), dim = 1)
 
-        p1 = self.c2(p1)
-        p2 = self.c2(p2)
-        p3 = self.c2(p3)
-        p4 = self.c2(p4)
-        p1 = self.bn_ac_dr_3(p1)
-        p2 = self.bn_ac_dr_3(p2)
-        p3 = self.bn_ac_dr_3(p3)
-        p4 = self.bn_ac_dr_3(p4)
-
-        c3 = torch.cat((p1, p2, p3, p4), dim = 1)
-
-        final_op = torch.cat((c1, c2, c3), dim = 1)
-
-        return final_op
 
 class SPBr(nn.Module):
 
@@ -274,18 +208,17 @@ class FGCN(nn.Module):
                        padding = self.padding,
                        stride = self.stride)
         self.fc = nn.Linear(in_features = 104*104*self.num_classes, out_features = self.num_classes)
+        self.mfcf_Block = MFCF()
+        self.fg_conv_Block = FG_conv(in_channels = 64)
+        self.spbr_Block = SPBr(in_channels = 50)
 
 
-    def forward(self, x):
-        h_data, l_data = x
+    def forward(self, h_data, l_data):
 
-        mfcf_Block = MFCF()
-        fg_conv_Block = FG_conv(in_channels = 64)
-        spbr_Block = SPBr(in_channels = 50)
 
-        mfcf_op = mfcf_Block((h_data, l_data))
-        fg_conv_op = fg_conv_Block(mfcf_op)
-        spbr_op = spbr_Block(h_data)
+        mfcf_op = self.mfcf_Block((h_data, l_data))
+        fg_conv_op = self.fg_conv_Block(mfcf_op)
+        spbr_op = self.spbr_Block(h_data)
 
         w_ad_op = self.w0 * fg_conv_op + self.w1 * spbr_op
 
@@ -295,16 +228,3 @@ class FGCN(nn.Module):
         output = self.fc(fl_op)
 
         return output
-
-
-
-
-def test():
-    h_data = torch.rand(1, 50, 100,100)
-    l_data = torch.rand(1, 1, 100,100)
-    model = FGCN(num_classes = 5)
-    model_op = model((h_data, l_data))
-
-    assert model_op.shape == (1, 5)
-    #print(summary(model, ((1, 50, 100, 100),(1, 1, 100, 100))))
-test()
