@@ -146,9 +146,8 @@ class FGCN(nn.Module):
         self.c1 = Conv(channels, num_classes, (1, 1), 1, 0)
         self.fc = nn.Linear(100*100*num_classes, num_classes)
 
-    def forward(self, x):
-        h_data, _ = x
-        mfcf_op = self.mfcf_block(x)
+    def forward(self, h_data, l_data):
+        mfcf_op = self.mfcf_block((h_data, l_data))
         fg_conv_op = self.fg_conv(mfcf_op)
         spbr_op = self.spbr(h_data)
 
@@ -158,15 +157,3 @@ class FGCN(nn.Module):
         output = self.fc(nn.Flatten()(conv_op))
 
         return output
-
-
-
-def test():
-    h_data = torch.rand(1,50, 100,100)
-    l_data = torch.rand(1,1,100,100)
-    model = FGCN(10, 50)
-    op = model((h_data, l_data))
-    assert op.shape == (1, 10)
-
-if __name__ == "__main__":
-    test()
