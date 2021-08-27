@@ -1,4 +1,10 @@
-from blocks import *
+"""
+
+FGCN Model Class
+© Sagnik Roy, 2021
+
+"""
+
 import numpy as np
 import random
 import torch
@@ -8,6 +14,7 @@ from torchsummary import summary
 np.random.seed(42)
 torch.manual_seed(42)
 random.seed(42)
+
 
 
 class MFCF(nn.Module):
@@ -27,11 +34,10 @@ class MFCF(nn.Module):
         self.ucba2l = UCBA(out_channels*2, out_channels*2, kernel_size, stride, padding)
         self.cba2h = CBA(out_channels*2, out_channels*2, kernel_size, stride, padding)
         self.cba2l = CBA(out_channels*2, out_channels*2, kernel_size, stride, padding)
-        self.ucba3l = UCBA(out_channels*4, out_channels, kernel_size, stride, padding)
-        self.cba3h = CBA(out_channels*4, out_channels, kernel_size, stride, padding)
+        self.ucba3l = UCBA(out_channels*2, out_channels, kernel_size, stride, padding)
+        self.cba3h = CBA(out_channels*2, out_channels, kernel_size, stride, padding)
 
-    def forward(self, x):
-        h_data, l_data = x
+    def forward(self, h_data, l_data):
 
         h1h = self.cba1h(h_data)
         h1l = self.pcba1h(h_data)
@@ -46,16 +52,13 @@ class MFCF(nn.Module):
         l2h = self.ucba2l(l1)
         l2l = self.cba2l(l1)
 
-        h2 = torch.cat((h2h, l2h), dim = 1)
-        l2 = torch.cat((h2l, l2l), dim = 1)
+        h2 = h2h + l2h
+        l2 = h2l + l2l
 
         h3 = self.cba3h(h2)
         l3 = self.ucba3l(l2)
 
-        return torch.cat((h3, l3), dim = 1)
-
-
-
+        return h3 + l3
 
 
 class FG_Conv(nn.Module):
@@ -128,26 +131,26 @@ class SPBr(nn.Module):
         return torch.cat((x1, x2, x3), dim = 1)
 
 
-
-
 class FGCN(nn.Module):
     def __init__(self,
                  num_classes,
                  channels=64,
                  w0 = 1.0,
-                 w1 = 1.0):
+                 w1 = 1.0,
+                 H = 100,
+                 W = 100):
         super().__init__()
         self.w0 = w0
         self.w1 = w1
         self.mfcf_block = MFCF(channels)
-        self.fg_conv = FG_Conv()
+        self.fg_conv = FG_Conv(in_channels = 32)
         self.spbr = SPBr(channels)
         self.c0 = Conv(192, channels, (1, 1), 1, 0)
         self.c1 = Conv(channels, num_classes, (1, 1), 1, 0)
-        self.fc = nn.Linear(100*100*num_classes, num_classes)
+        self.fc = nn.Linear(W*H*num_classes, num_classes)
 
     def forward(self, h_data, l_data):
-        mfcf_op = self.mfcf_block((h_data, l_data))
+        mfcf_op = self.mfcf_block(h_data, l_data)
         fg_conv_op = self.fg_conv(mfcf_op)
         spbr_op = self.spbr(h_data)
 
@@ -157,3 +160,9 @@ class FGCN(nn.Module):
         output = self.fc(nn.Flatten()(conv_op))
 
         return output
+
+
+
+if __name__ == "__main__":
+    model = FGCN(num_classes = 10, H = 200, W = 150)
+    summary(model, [(64,200,150),(1,200,150)],device = "cpu")
