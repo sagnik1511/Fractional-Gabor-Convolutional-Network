@@ -1,15 +1,16 @@
 import torch
 import torch.nn as nn
 
+class Conv(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride, padding):
+        super().__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding),
+        )
 
-"""
-Primary model blocks to create the base blocks
 
-
-"""
-
-def Conv(in_channels, out_channels, kernel_size, stride, padding):
-    return nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
+    def forward(self, x):
+        return self.conv(x)
 
 
 class PCBA(nn.Module):
