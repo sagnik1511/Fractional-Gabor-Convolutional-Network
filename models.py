@@ -14,9 +14,9 @@ class MFCF(nn.Module):
 
     def __init__(self, in_channels=50,
                  out_channels = 32,
-                 kernel_size = (3, 3),
+                 kernel_size = (1, 1),
                  stride=1,
-                 padding = 1):
+                 padding = 0):
 
         super(MFCF, self).__init__()
         self.pcba1h = PCBA(in_channels, out_channels, kernel_size, stride, padding)
@@ -27,8 +27,8 @@ class MFCF(nn.Module):
         self.ucba2l = UCBA(out_channels*2, out_channels*2, kernel_size, stride, padding)
         self.cba2h = CBA(out_channels*2, out_channels*2, kernel_size, stride, padding)
         self.cba2l = CBA(out_channels*2, out_channels*2, kernel_size, stride, padding)
-        self.ucba3l = UCBA(out_channels*2, out_channels, kernel_size, stride, padding)
-        self.cba3h = CBA(out_channels*2, out_channels, kernel_size, stride, padding)
+        self.ucba3l = UCBA(out_channels*4, out_channels, kernel_size, stride, padding)
+        self.cba3h = CBA(out_channels*4, out_channels, kernel_size, stride, padding)
 
     def forward(self, x):
         h_data, l_data = x
@@ -58,7 +58,7 @@ class MFCF(nn.Module):
 
 
 
-class FG_conv(nn.Module):
+class FG_Conv(nn.Module):
 
     def __init__(self,
                  in_channels = 64,
@@ -73,7 +73,7 @@ class FG_conv(nn.Module):
         self.p1 = [Conv(in_channels, out_channels, kernel_size, stride, padding) for _ in range(4)]
         self.p2 = [Conv(out_channels, out_channels, kernel_size, stride, padding) for _ in range(4)]
         self.p3 = [Conv(out_channels, out_channels, kernel_size, stride, padding) for _ in range(4)]
-        self.bad = BAD(in_channels = out_channels, momentum = momentum, dropout = dropout)
+        self.bad = BAD(out_channels, momentum, dropout)
 
     def forward(self, x):
 
@@ -105,126 +105,68 @@ class FG_conv(nn.Module):
 class SPBr(nn.Module):
 
     def __init__(self,
-                 in_channels = 192,
-                 kernel_size = (3, 3),
-                 num_layers = 64,
-                 padding = 1,
-                 stride = 1,
-                 dropout = 0.1,
-                 momentum = 0.9):
+                 in_channels=64,
+                 out_channels=64,
+                 kernel_size=(1, 1),
+                 stride=1,
+                 padding=0,
+                 momentum=0.9,
+                 dropout=0.1):
+        super().__init__()
 
-        super(SPBr, self).__init__()
-
-        self.in_channels = in_channels
-        self.kernel_size = kernel_size
-        self.num_layers = num_layers
-        self.padding = padding
-        self.stride = stride
-        self.dropout = dropout
-        self.momentum = momentum
-        self.c0 = conv(cin = self.in_channels,
-                       out = self.num_layers,
-                       kernel_size = self.kernel_size,
-                       padding = self.padding,
-                       stride = self.stride)
-        self.c1 = conv(cin = self.num_layers,
-                       out = self.num_layers,
-                       kernel_size = self.kernel_size,
-                       padding = self.padding,
-                       stride = self.stride)
-        self.c2 = conv(cin=self.num_layers,
-                       out=self.num_layers,
-                       kernel_size=self.kernel_size,
-                       padding=self.padding,
-                       stride=self.stride)
-        self.bn_ac_dr_1 = nn.Sequential(
-            nn.BatchNorm2d(num_features = self.num_layers, momentum = self.momentum),
-            nn.ReLU(),
-            nn.Dropout(p=self.dropout),
-        )
-        self.bn_ac_dr_2 = nn.Sequential(
-            nn.BatchNorm2d(num_features=self.num_layers, momentum=self.momentum),
-            nn.ReLU(),
-            nn.Dropout(p=self.dropout),
-        )
-        self.bn_ac_dr_3 = nn.Sequential(
-            nn.BatchNorm2d(num_features=self.num_layers, momentum=self.momentum),
-            nn.ReLU(),
-            nn.Dropout(p=self.dropout),
-        )
+        self.c1 = Conv(in_channels, out_channels, kernel_size, stride, padding)
+        self.c2 = Conv(out_channels, out_channels, kernel_size, stride, padding)
+        self.c3 = Conv(out_channels, out_channels, kernel_size, stride, padding)
+        self.bad = BAD(out_channels, momentum, dropout)
 
     def forward(self, x):
 
-        x1 = self.c0(x)
-        x1 = self.bn_ac_dr_1(x1)
+        x1 = self.c1(x)
+        x2 = self.c2(self.bad(x1))
+        x3 = self.c3(self.bad(x2))
 
-        x2 = self.c1(x1)
-        x2 = self.bn_ac_dr_2(x2)
-
-        x3 = self.c1(x2)
-        x3 = self.bn_ac_dr_3(x3)
-
-        final_op = torch.cat((x1, x2, x3), dim = 1)
-
-        return final_op
+        return torch.cat((x1, x2, x3), dim = 1)
 
 
 
 
 class FGCN(nn.Module):
-
     def __init__(self,
                  num_classes,
-                 in_channels = 50,
-                 kernel_size = (3, 3),
-                 gab_layers = 64,
-                 padding = 1,
-                 stride = 1,
-                 dropout = 0.1,
-                 momentum = 0.9,
+                 channels=64,
                  w0 = 1.0,
                  w1 = 1.0):
-
-        super(FGCN, self).__init__()
-
-        self.in_channels = in_channels
-        self.kernel_size = kernel_size
-        self.gab_layers = gab_layers
-        self.padding = padding
-        self.stride = stride
-        self.dropout = dropout
-        self.momentum = momentum
-        self.num_classes = num_classes
+        super().__init__()
         self.w0 = w0
         self.w1 = w1
-        self.c0 = conv(cin = 192,
-                       out = 64,
-                       kernel_size = (1, 1),
-                       padding = self.padding,
-                       stride = self.stride)
-        self.c1 = conv(cin = 64,
-                       out = self.num_classes,
-                       kernel_size = (1, 1),
-                       padding = self.padding,
-                       stride = self.stride)
-        self.fc = nn.Linear(in_features = 104*104*self.num_classes, out_features = self.num_classes)
-        self.mfcf_Block = MFCF()
-        self.fg_conv_Block = FG_conv(in_channels = 64)
-        self.spbr_Block = SPBr(in_channels = 50)
+        self.mfcf_block = MFCF(channels)
+        self.fg_conv = FG_Conv()
+        self.spbr = SPBr(channels)
+        self.c0 = Conv(192, channels, (1, 1), 1, 0)
+        self.c1 = Conv(channels, num_classes, (1, 1), 1, 0)
+        self.fc = nn.Linear(100*100*num_classes, num_classes)
 
+    def forward(self, x):
+        h_data, _ = x
+        mfcf_op = self.mfcf_block(x)
+        fg_conv_op = self.fg_conv(mfcf_op)
+        spbr_op = self.spbr(h_data)
 
-    def forward(self, h_data, l_data):
+        wad_op = self.w0 * spbr_op + self.w1 * fg_conv_op
 
-
-        mfcf_op = self.mfcf_Block((h_data, l_data))
-        fg_conv_op = self.fg_conv_Block(mfcf_op)
-        spbr_op = self.spbr_Block(h_data)
-
-        w_ad_op = self.w0 * fg_conv_op + self.w1 * spbr_op
-
-        conv1 = self.c0(w_ad_op)
-        conv2 = self.c1(conv1)
-        fl_op = nn.Flatten()(conv2)
-        output = self.fc(fl_op)
+        conv_op = self.c1(self.c0(wad_op))
+        output = self.fc(nn.Flatten()(conv_op))
 
         return output
+
+
+
+def test():
+    h_data = torch.rand(1,50, 100,100)
+    l_data = torch.rand(1,1,100,100)
+    model = FGCN(10, 50)
+    op = model((h_data, l_data))
+    assert op.shape == (1, 10)
+
+if __name__ == "__main__":
+    test()
