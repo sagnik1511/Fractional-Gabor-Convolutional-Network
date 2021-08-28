@@ -1,5 +1,15 @@
+"""
+
+Primary Blocks required to build the branch
+© Sagnik Roy, 2021.
+
+"""
+
+
+
 import torch
 import torch.nn as nn
+
 
 class Conv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding):
@@ -35,17 +45,17 @@ class PCBA(nn.Module):
 
 class CBA(nn.Module):
     def __init__(self,
-                 in_channels=150,
-                 out_channels=32,
-                 kernel_size=(3, 3),
-                 stride=1,
-                 padding=1,
-                 momentum=0.9):
+                 in_channels = 150,
+                 out_channels = 32,
+                 kernel_size = (3, 3),
+                 stride = 1,
+                 padding = 1,
+                 momentum = 0.9):
         super().__init__()
         self.cba = nn.Sequential(
             Conv(in_channels, out_channels, kernel_size, stride, padding),
             nn.ReLU(),
-            nn.BatchNorm2d(num_features=out_channels, momentum=momentum),
+            nn.BatchNorm2d(num_features = out_channels, momentum = momentum),
         )
 
     def forward(self, x):
@@ -54,18 +64,18 @@ class CBA(nn.Module):
 
 class UCBA(nn.Module):
     def __init__(self,
-                 in_channels=150,
-                 out_channels=32,
-                 kernel_size=(3, 3),
-                 stride=1,
-                 padding=1,
-                 momentum=0.9):
+                 in_channels = 150,
+                 out_channels = 32,
+                 kernel_size = (3, 3),
+                 stride = 1,
+                 padding = 1,
+                 momentum = 0.9):
         super().__init__()
         self.ucba = nn.Sequential(
             nn.Upsample(scale_factor = 2),
             Conv(in_channels, out_channels, kernel_size, stride, padding),
             nn.ReLU(),
-            nn.BatchNorm2d(num_features=out_channels, momentum=momentum),
+            nn.BatchNorm2d(num_features = out_channels, momentum = momentum),
         )
 
     def forward(self, x):
