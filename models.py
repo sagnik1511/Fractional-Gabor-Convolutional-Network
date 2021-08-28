@@ -1,18 +1,17 @@
 """
 
-FGCN Model Class
+FGCN Model Implementation in Pytorch
 © Sagnik Roy, 2021
 
 """
 
 from blocks import *
-import numpy as np
 import random
 import torch
 import torch.nn as nn
 from torchsummary import summary
 
-np.random.seed(42)
+
 torch.manual_seed(42)
 random.seed(42)
 
@@ -20,10 +19,10 @@ random.seed(42)
 
 class MFCF(nn.Module):
 
-    def __init__(self, in_channels=50,
+    def __init__(self, in_channels = 50,
                  out_channels = 32,
                  kernel_size = (1, 1),
-                 stride=1,
+                 stride = 1,
                  padding = 0):
 
         super(MFCF, self).__init__()
@@ -68,9 +67,9 @@ class FG_Conv(nn.Module):
                  in_channels = 64,
                  out_channels = 16,
                  kernel_size = (3, 3),
-                 stride=1,
+                 stride = 1,
                  padding = 1,
-                 momentum=0.9,
+                 momentum = 0.9,
                  dropout = 0.1):
 
         super().__init__()
@@ -109,13 +108,13 @@ class FG_Conv(nn.Module):
 class SPBr(nn.Module):
 
     def __init__(self,
-                 in_channels=64,
-                 out_channels=64,
-                 kernel_size=(1, 1),
-                 stride=1,
-                 padding=0,
-                 momentum=0.9,
-                 dropout=0.1):
+                 in_channels = 64,
+                 out_channels = 64,
+                 kernel_size = (1, 1),
+                 stride = 1,
+                 padding = 0,
+                 momentum = 0.9,
+                 dropout = 0.1):
         super().__init__()
 
         self.c1 = Conv(in_channels, out_channels, kernel_size, stride, padding)
@@ -135,7 +134,7 @@ class SPBr(nn.Module):
 class FGCN(nn.Module):
     def __init__(self,
                  num_classes,
-                 channels=64,
+                 channels = 64,
                  w0 = 1.0,
                  w1 = 1.0,
                  H = 100,
@@ -166,4 +165,4 @@ class FGCN(nn.Module):
 
 if __name__ == "__main__":
     model = FGCN(num_classes = 10, H = 200, W = 150)
-    summary(model, [(64,200,150),(1,200,150)],device = "cpu")
+    summary(model, [(64,200,150), (1,200,150)], device = "cpu")
