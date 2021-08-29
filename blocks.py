@@ -72,7 +72,7 @@ class UCBA(nn.Module):
                  momentum = 0.9):
         super().__init__()
         self.ucba = nn.Sequential(
-            nn.Upsample(scale_factor = 2),
+            nn.Upsample(size = 11),
             Conv(in_channels, out_channels, kernel_size, stride, padding),
             nn.ReLU(),
             nn.BatchNorm2d(num_features = out_channels, momentum = momentum),
